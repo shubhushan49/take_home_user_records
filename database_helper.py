@@ -22,7 +22,8 @@ Base = declarative_base()
 
 class User(Base):
     __tablename__ = "users"
-    id = Column(String, primary_key=True)
+    id = Column(Integer, autoincrement=True)
+    user_id = Column(String, primary_key=True)
     first_name = Column(String(50))
     last_name = Column(String(50))
 
@@ -34,11 +35,13 @@ class Group(Base):
 
 class UserAndGroup(Base):
     __tablename__ = "groups_users"
-    user_id = Column(String(50), primary_key=True)
+    user_id = Column(Integer, primary_key=True)
     group_id = Column(Integer, primary_key=True)
 
-"""
+if __name__ == "__main__":
+    Base.metadata.create_all(engine)
 
+"""
 Learning SQL Alchemy
 
 #creates all tables
