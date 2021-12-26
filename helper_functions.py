@@ -1,9 +1,11 @@
+from os import name
 from database_helper import session, User, Group, UserAndGroup
-from sqlalchemy.sql.expression import and_
+from sqlalchemy.sql.expression import and_, update
 import json
-#response object
-def response(status, data):
-    return json.dumps({"status": status, "data": data})
+#response object for user endpoint
+def response_user(data):
+    return json.dumps(data)
+
 #checks if the json payload is valid
 def validate_user_record(record):
     valid_entry = 4
@@ -82,15 +84,72 @@ def user_post(payload):
         session.add(user_and_group)
         session.commit()
     return user_
+#deletes the group and the relationship between members and the group
+def group_delete(grp_name):
+    group = session.query(Group).filter(Group.name == grp_name).first()
+    if group == None:
+        return None
+    #fetch all records for the group
+    users_and_group = session.query(UserAndGroup).filter(UserAndGroup.group_id == group.id)
+    #delete all records of the group
+    for relationship in users_and_group:
+        session.delete(relationship)
+        session.commit()
+    #delete the group
+    session.delete(group)
+    session.commit()
+    return "Success"
+#fetches all members of the group
+def group_get(grp_name):
+    #fetch details of the group
+    group = session.query(Group).filter(Group.name == grp_name).first()
+    if group == None:
+        return None
+    #get the relationship between users table and group table
+    users_and_groups = session.query(UserAndGroup).filter(UserAndGroup.group_id == group.id)
+    if users_and_groups == None:
+        return None
+    members_list = []
+    for row in users_and_groups:
+        #fetch users of the group from the user table
+        user = session.query(User).filter(User.id == row.user_id).first()
+        members_list.append(user.user_id)
+    return members_list
 
-def group_delete():
-    pass
-
-def group_get():
-    pass
-
-def group_post():
-    pass
-
-def group_put():
-    pass
+#creates a new group if a group with the same name does not exist in the database
+def group_post(grp_name):
+    group = session.query(Group).filter(Group.name == grp_name).first()
+    if group!=None:
+        return None
+    new_grp = Group(name=grp_name)
+    session.add(new_grp)
+    session.commit()
+    return []
+#kicks out users if they are in the group, adds them if they are not a member of the group
+def group_put(grp_name, members_list):
+    group = session.query(Group).filter(Group.name == grp_name).first()
+    #the group does not exist
+    if group == None:
+        return None
+    for member in members_list:
+        user = session.query(User).filter(User.user_id == member)
+        #if a user does not exist
+        if user == None:
+            return None
+        #if the user is present in the group remove member from the relationship table
+        user_in_group = session.query(UserAndGroup).filter(and_(UserAndGroup.group_id == group.id, UserAndGroup.user_id == user.id)).first()
+        if user_in_group != None:
+            session.delete(user_in_group)
+        else:
+            #if the user is not in the group, add to the relationship table
+            add_user_to_group = UserAndGroup(user_id = user.id, group_id = group.id)
+            session.add(add_user_to_group)
+        session.commit()
+    
+    updated_member_list = []
+    #fetch the updated records of the group
+    mem_list = session.Query(UserAndGroup).filter(UserAndGroup.group_id == group.id)
+    for mem in mem_list:
+        user = session.Query(User).filter(User.id == mem.user_id)
+        updated_member_list.append(user.user_id)
+    return updated_member_list
