@@ -6,13 +6,24 @@ import json
 def response_user(data):
     return json.dumps(data)
 
+def set_json_header():
+    return {"Content-Type" : "application/json"}
+
+def user_schema(user, groups):
+    data = {
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "id": user.user_id,
+        "groups": groups
+        }
+    return data
+
 #checks if the json payload is valid
 def validate_user_record(record):
     valid_entry = 4
     for key in record.keys():
         if key == "first_name" or key == "last_name" or key == "id" or key == "groups":
             valid_entry -= 1
-    
     if valid_entry == 0:
         return True
     else:
@@ -23,37 +34,47 @@ def user_delete(user_id):
     user = session.query(User).filter(User.user_id == user_id).first()
     #check if user exists
     if user == None:
-        return None
+        return None, []
     #fetch all the groups that the user belongs to
     users_and_groups = session.query(UserAndGroup).filter(UserAndGroup.user_id == user.id)
     #delete the relationship between user and groups they belonged to
+    groups = []
     for item in users_and_groups:
+        group = session.query(Group).filter(Group.id == item.group_id).first()
+        groups.append(group.name)
         session.delete(item)
         session.commit()
     #delete the user
     session.delete(user)
     session.commit()
-    return user
+    return user, groups
 
 #fetches user from the database
 def user_get(user_id):
     #fetch user from database
     user = session.query(User).filter(User.user_id == user_id).first()
-    return user
+    user_in_groups = session.query(UserAndGroup).filter(UserAndGroup.user_id == user.id)
+    if user_in_groups == None:
+        return user,[]
+    groups = []
+    for row in user_in_groups:
+        tmp = session.query(Group).filter(Group.id == row.group_id).first()
+        groups.append(tmp.name)
+    return user, groups
 
 #updates the groups that user belongs to and the user's first name and last name as well
 def user_put(payload):
-    user = session.query(User).filter(User.user_id == payload.id).first()
+    user = session.query(User).filter(User.user_id == payload['id']).first()
     #if user does not exist
     if user == None:
-        return None
-    user.first_name = payload.first_name
-    user.last_name = payload.last_name
+        return None, []
+    user.first_name = payload['first_name']
+    user.last_name = payload['last_name']
     session.commit()
     #a group must exist before a user can join
-    for group_name in payload.groups:
+    for group_name in payload['groups']:
         grp = session.query(Group).filter(Group.name == group_name).first()
-        user_and_groups = session.query(UserAndGroup).filter(and_(UserAndGroup.user_id == user.id, UserAndGroup.group_id == grp.id))
+        user_and_groups = session.query(UserAndGroup).filter(and_(UserAndGroup.user_id == user.id, UserAndGroup.group_id == grp.id)).first()
         #if there is no relationship between the group and the user add user to the group
         if user_and_groups == None:
             create_user_and_group = UserAndGroup(user_id = user.id, group_id = grp.id)
@@ -62,22 +83,32 @@ def user_put(payload):
         else:
             session.delete(user_and_groups)
         session.commit()
-    return user
+    
+    user_in_groups = session.query(UserAndGroup).filter(UserAndGroup.user_id == user.id)
+    if user_in_groups == None:
+        return user, []
+    groups = []
+    for row in user_in_groups:
+        tmp = session.query(Group).filter(Group.id == row.group_id).first()
+        groups.append(tmp.name)
+
+    return user, groups
 
 #creates new user in the database and adds users to groups
 def user_post(payload):
     #check if a user with the user id already exists
-    user_ = session.query(User).filter(User.user_id == payload.id).first()
+    user_ = session.query(User).filter(User.user_id == payload['id']).first()
     if user_ != None:
         return None
     #create a new user
-    user_ = User(id = payload.id, first_name = payload.first_name, last_name=payload.last_name)
+    user_ = User(user_id = payload["id"], first_name = payload["first_name"], last_name=payload["last_name"])
     session.add(user_)
     session.commit()
-
-    user_ = session.query(User).filter(User.user_id == payload.id).first()
+    user_ = session.query(User).filter(User.user_id == payload['id']).first()
+    print("hello")
+    print(user_)
     #groups must exist before a user can join to the group
-    for group in payload.groups:
+    for group in payload['groups']:
         grp = session.query(Group).filter(Group.name == group).first()
         #Add an entry to groups_users table
         user_and_group = UserAndGroup(user_id = user_.id, group_id = grp.id)
@@ -128,11 +159,12 @@ def group_post(grp_name):
 #kicks out users if they are in the group, adds them if they are not a member of the group
 def group_put(grp_name, members_list):
     group = session.query(Group).filter(Group.name == grp_name).first()
+    print(group)
     #the group does not exist
     if group == None:
         return None
     for member in members_list:
-        user = session.query(User).filter(User.user_id == member)
+        user = session.query(User).filter(User.user_id == member).first()
         #if a user does not exist
         if user == None:
             return None
@@ -148,8 +180,8 @@ def group_put(grp_name, members_list):
     
     updated_member_list = []
     #fetch the updated records of the group
-    mem_list = session.Query(UserAndGroup).filter(UserAndGroup.group_id == group.id)
+    mem_list = session.query(UserAndGroup).filter(UserAndGroup.group_id == group.id)
     for mem in mem_list:
-        user = session.Query(User).filter(User.id == mem.user_id)
+        user = session.query(User).filter(User.id == mem.user_id).first()
         updated_member_list.append(user.user_id)
     return updated_member_list
