@@ -105,8 +105,6 @@ def user_post(payload):
     session.add(user_)
     session.commit()
     user_ = session.query(User).filter(User.user_id == payload['id']).first()
-    print("hello")
-    print(user_)
     #groups must exist before a user can join to the group
     for group in payload['groups']:
         grp = session.query(Group).filter(Group.name == group).first()
@@ -159,7 +157,6 @@ def group_post(grp_name):
 #kicks out users if they are in the group, adds them if they are not a member of the group
 def group_put(grp_name, members_list):
     group = session.query(Group).filter(Group.name == grp_name).first()
-    print(group)
     #the group does not exist
     if group == None:
         return None
